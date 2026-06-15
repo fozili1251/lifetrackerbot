@@ -85,7 +85,9 @@ def ensure_budget_sheet(spreadsheet):
         ws.update("A1:D1", [["Категория", "Бюджет (₽)", "Потрачено (₽)", "Остаток (₽)"]])
         categories = ["Еда", "Транспорт", "Развлечения", "Здоровье", "Одежда", "Коммуналка", "Прочее"]
         for i, cat in enumerate(categories, start=2):
-            ws.update(f"A{i}:D{i}", [[cat, "", f"=SUMIFS(Финансы!C:C,Финансы!B:B,"расход",Финансы!E:E,A{i})", f"=IF(B{i}="","",B{i}-C{i})"]])
+            sumifs = '=SUMIFS(Финансы!C:C,Финансы!B:B,"расход",Финансы!E:E,A' + str(i) + ')'
+            ifformula = '=IF(B' + str(i) + '="","",B' + str(i) + '-C' + str(i) + ')'
+            ws.update(f"A{i}:D{i}", [[cat, "", sumifs, ifformula]])
     return ws
 
 def write_finance(data: dict):
