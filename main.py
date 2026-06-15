@@ -38,7 +38,7 @@ SYSTEM_PROMPT = """Ты парсишь сообщения пользовател
 Отвечай СТРОГО в JSON без лишнего текста:
 
 Для finance:
-{"category": "finance", "type": "расход/доход", "amount": число, "description": "описание", "date": "YYYY-MM-DD"}
+{"category": "finance", "type": "расход/доход", "amount": число, "description": "описание", "spend_category": "категория трат (еда/транспорт/развлечения/здоровье/одежда/коммуналка/прочее)", "date": "YYYY-MM-DD"}
 
 Для sport:
 {"category": "sport", "activity": "тип активности", "duration_min": число или null, "distance_km": число или null, "calories": число или null, "note": "доп. инфо", "date": "YYYY-MM-DD"}
@@ -69,15 +69,37 @@ def parse_message(text: str, today: str) -> dict:
     return json.loads(raw)
 
 # ── Запись в листы ─────────────────────────────────────────────────────────────
+def get_or_create_spreadsheet():
+    creds_json = os.environ["GOOGLE_CREDENTIALS_JSON"]
+    creds_dict = json.loads(creds_json)
+    creds = Credentials.from_service_account_info(creds_dict, scopes=SCOPES)
+    gc = gspread.authorize(creds)
+    return gc.open_by_key(os.environ["SPREADSHEET_ID"])
+
+def ensure_budget_sheet(spreadsheet):
+    try:
+        ws = spreadsheet.worksheet("Бюджет")
+    except:
+        ws = spreadsheet.add_worksheet(title="Бюджет", rows=20, cols=4)
+    if ws.cell(1, 1).value != "Категория":
+        ws.update("A1:D1", [["Категория", "Бюджет (₽)", "Потрачено (₽)", "Остаток (₽)"]])
+        categories = ["Еда", "Транспорт", "Развлечения", "Здоровье", "Одежда", "Коммуналка", "Прочее"]
+        for i, cat in enumerate(categories, start=2):
+            ws.update(f"A{i}:D{i}", [[cat, "", f"=SUMIFS(Финансы!C:C,Финансы!B:B,"расход",Финансы!E:E,A{i})", f"=IF(B{i}="","",B{i}-C{i})"]])
+    return ws
+
 def write_finance(data: dict):
-    ws = get_sheet("Финансы")
-    if ws.row_count < 2 or ws.cell(1, 1).value != "Дата":
-        ws.update("A1:E1", [["Дата", "Тип", "Сумма (₽)", "Описание", "Добавлено"]])
+    spreadsheet = get_or_create_spreadsheet()
+    ws = spreadsheet.worksheet("Финансы")
+    if ws.cell(1, 1).value != "Дата":
+        ws.update("A1:F1", [["Дата", "Тип", "Сумма (₽)", "Описание", "Категория", "Добавлено"]])
+    ensure_budget_sheet(spreadsheet)
     ws.append_row([
         data.get("date", ""),
         data.get("type", ""),
         data.get("amount", ""),
         data.get("description", ""),
+        data.get("spend_category", "прочее").capitalize(),
         datetime.now().strftime("%d.%m.%Y %H:%M"),
     ])
 
