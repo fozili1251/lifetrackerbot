@@ -2,7 +2,7 @@ import os
 import json
 import logging
 import re
-import google.generativeai as genai
+from groq import Groq
 import gspread
 from google.oauth2.service_account import Credentials
 from telegram import Update
@@ -54,13 +54,16 @@ SYSTEM_PROMPT = """Ты парсишь сообщения пользовател
 Сегодняшняя дата будет передана в сообщении. Используй её как date если другая не указана."""
 
 def parse_message(text: str, today: str) -> dict:
-    genai.configure(api_key=os.environ["GEMINI_API_KEY"])
-    model = genai.GenerativeModel(
-        model_name="gemini-2.0-flash",
-        system_instruction=SYSTEM_PROMPT,
+    client = Groq(api_key=os.environ["GROQ_API_KEY"])
+    response = client.chat.completions.create(
+        model="llama-3.3-70b-versatile",
+        messages=[
+            {"role": "system", "content": SYSTEM_PROMPT},
+            {"role": "user", "content": f"Сегодня {today}. Сообщение: {text}"},
+        ],
+        temperature=0,
     )
-    response = model.generate_content(f"Сегодня {today}. Сообщение: {text}")
-    raw = response.text.strip()
+    raw = response.choices[0].message.content.strip()
     raw = re.sub(r"^```(?:json)?\s*", "", raw)
     raw = re.sub(r"\s*```$", "", raw)
     return json.loads(raw)
